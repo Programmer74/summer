@@ -4,6 +4,7 @@ type C struct {
 	Z int
 	A *interface{} `summer:"*testPackage.A"`
 	B *interface{} `summer:"*testPackage.B"`
+	C int `summer.property:"testPropertyName|123"`
 	f *Ifce
 }
 
@@ -20,5 +21,5 @@ func (c *C) getB() *B {
 }
 
 func (c *C) DoC() int {
-	return 100 * c.Z + c.getB().DoB() + c.getA().DoA();
+	return 100 * c.Z + c.getB().DoB() + c.getA().DoA()
 }

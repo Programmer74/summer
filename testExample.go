@@ -10,6 +10,8 @@ func main() {
 	log.LoadConfiguration("./log4go.json")
 	defer log.Close()
 
+	summer.ParseProperties("./example.properties")
+
 	summer.RegisterBean("1", testPackage.C{Z: 3})
 	summer.RegisterBean("2", testPackage.A{X: 2})
 	summer.RegisterBean("3", testPackage.B{Y: 1})
@@ -24,4 +26,5 @@ func main() {
 	_ = b
 
 	log.Info("Answer is %d", c.DoC())
+	log.Info("Property is %d", c.C)
 }

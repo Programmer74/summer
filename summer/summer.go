@@ -1,17 +1,24 @@
 package summer
 
 import (
+	"bufio"
 	"errors"
 	log "github.com/jeanphorn/log4go"
+	"os"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
-const SUMMER_BEAN_TAG = "summer"
+const SummerBeanTag = "summer"
+const SummerPropertyTag = "summer.property"
 
 var uninitializedBeans = make(map[string]interface{})
 
 var initializedBeansList = make([]interface{}, 0)
 var initializedBeanNamesList = make([]string, 0)
+
+var propertiesMap = make(map[string]string)
 
 func RegisterBean(beanName string, bean interface{}) {
 	uninitializedBeans[beanName] = bean
@@ -24,6 +31,25 @@ func GetBean(beanName string) interface{} {
 		}
 	}
 	panic("no processed bean found")
+}
+
+func ParseProperties(path string) {
+	//todo: full format coverage?
+	file, err := os.Open(path)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		arr := strings.Split(line, "=")
+		propertyKey := arr[0]
+		propertyVal := arr[1]
+		propertiesMap[propertyKey] = propertyVal
+	}
 }
 
 func PerformDependencyInjection() {
@@ -100,7 +126,11 @@ func getAnnotatedDependenciesCount(x interface{}) int {
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if f.Tag != "" {
-				_, ok := f.Tag.Lookup(SUMMER_BEAN_TAG)
+				_, ok := f.Tag.Lookup(SummerBeanTag)
+				if ok {
+					annotatedDependenciesCount++
+				}
+				_, ok = f.Tag.Lookup(SummerPropertyTag)
 				if ok {
 					annotatedDependenciesCount++
 				}
@@ -125,49 +155,94 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 	for i := 0; i < sourceType.NumField(); i++ {
 		sourceField := sourceType.Field(i)
 		if sourceField.Tag != "" {
-			requiredTypeAsString, ok := sourceField.Tag.Lookup(SUMMER_BEAN_TAG)
-			if ok {
-				log.Debug("Injectable 'summer' field %s", sourceField)
-				summerTotalDependenciesCount++
-
-				targetField := reflect.ValueOf(xCopy).Elem().Field(i)
-				if targetField.IsValid() {
-					if targetField.Kind() != reflect.Ptr {
-						panic("field annotated by 'summer' should be pointers")
-					}
-					if targetField.IsNil() {
-						log.Debug("Field %s is not set", targetField)
-						applicableBean, err := getProcessedBeanByType(requiredTypeAsString)
-						if err == nil {
-							log.Debug("Field %s value found : %s", targetField, applicableBean)
-							if !targetField.CanSet() {
-								log.Critical("CANNOT SET FIELD %s", targetField)
-							}
-
-							if targetField.Type().String() == "*interface {}" {
-								targetField.Set(reflect.ValueOf(applicableBean).Convert(targetField.Type()))
-								summerInjectedDependenciesCount++
-							} else {
-								//setterMethodName := "SummerSet" + sourceField.Name
-								panic("field setter injection not implemented yet")
-							}
-
-						} else {
-							log.Error("Field %s value not found by now", targetField)
-						}
-					} else {
-						log.Debug("Field %s already set", targetField)
-						summerInjectedDependenciesCount++
-					}
-				} else {
-					log.Error("For some reason, %s is not valid", targetField)
-				}
+			requiredTypeAsString, beanTagFound := sourceField.Tag.Lookup(SummerBeanTag)
+			if beanTagFound {
+				summerTotalDependenciesCount, summerInjectedDependenciesCount = tryFillBeans(sourceField, summerTotalDependenciesCount, xCopy, i, requiredTypeAsString, summerInjectedDependenciesCount)
+			}
+			requiredPropertyParam, propertyTagFound := sourceField.Tag.Lookup(SummerPropertyTag)
+			if propertyTagFound {
+				tryFillProperties(sourceField, xCopy, i, requiredPropertyParam)
 			}
 		}
 	}
 
 	unprocessedDependenciesLeft := summerTotalDependenciesCount - summerInjectedDependenciesCount
 	return unprocessedDependenciesLeft, xCopy
+}
+
+func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount int, xCopy interface{}, i int, requiredTypeAsString string, summerInjectedDependenciesCount int) (int, int) {
+	log.Debug("Injectable 'summer' bean field %s", sourceField)
+	summerTotalDependenciesCount++
+
+	targetField := reflect.ValueOf(xCopy).Elem().Field(i)
+	if targetField.IsValid() {
+		if targetField.Kind() != reflect.Ptr {
+			panic("field annotated by 'summer' should be pointers")
+		}
+		if targetField.IsNil() {
+			log.Debug("Field %s is not set", targetField)
+			applicableBean, err := getProcessedBeanByType(requiredTypeAsString)
+			if err == nil {
+				log.Debug("Field %s value found : %s", targetField, applicableBean)
+				if !targetField.CanSet() {
+					log.Critical("CANNOT SET FIELD %s", targetField)
+				}
+
+				if targetField.Type().String() == "*interface {}" {
+					targetField.Set(reflect.ValueOf(applicableBean).Convert(targetField.Type()))
+					summerInjectedDependenciesCount++
+				} else {
+					panic("field setter injection not implemented yet")
+				}
+
+			} else {
+				log.Error("Field %s value not found by now", targetField)
+			}
+		} else {
+			log.Debug("Field %s already set", targetField)
+			summerInjectedDependenciesCount++
+		}
+	} else {
+		log.Error("For some reason, %s is not valid", targetField)
+	}
+	return summerTotalDependenciesCount, summerInjectedDependenciesCount
+}
+
+func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, i int, requiredPropertyParam string) {
+	log.Debug("Injectable 'summer' property field %s", sourceField)
+
+	arr := strings.Split(requiredPropertyParam, "|")
+	propertyKey := arr[0]
+
+	targetField := reflect.ValueOf(xCopy).Elem().Field(i)
+	if targetField.IsValid() {
+
+		propertyValue, ok := propertiesMap[propertyKey]
+
+		if !ok {
+			if len(arr) == 1 {
+				panic("property value not found and no default value specified")
+			} else {
+				propertyValue = arr[1]
+			}
+		}
+
+		log.Info("%s", propertyValue)
+		if targetField.Type().Name() == "int" {
+			valueAsInt, err := strconv.Atoi(propertyValue)
+			if err == nil {
+				log.Error(err)
+			}
+			targetField.Set(reflect.ValueOf(valueAsInt))
+		} else {
+			//todo: cover other types as well
+			targetField.Set(reflect.ValueOf(propertyValue))
+		}
+
+
+	} else {
+		log.Error("For some reason, %s is not valid", targetField)
+	}
 }
 
 func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
