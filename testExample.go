@@ -16,7 +16,7 @@ func main() {
 	summer.RegisterBean("BeanA", testPackage.A{X: 2})
 	summer.RegisterBean("BeanB", testPackage.B{Y: 1})
 	summer.RegisterBeanWithTypeAlias("Impl2:Ifce", testPackage.Impl2{}, "*testPackage.Ifce")
-	summer.RegisterBean("customBeanName", testPackage.A{X: 5})
+	summer.RegisterBean("customBeanName", testPackage.A2{X: 5})
 
 	summer.PerformDependencyInjection()
 

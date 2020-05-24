@@ -302,6 +302,7 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, string, 
 			compatibleBeanIndex := compatibleBeansIndexes[i]
 			log.Critical(" - %s", initializedBeanNamesList[compatibleBeanIndex])
 		}
+		panic("multiple injection candidates; see logs above")
 	}
 	compatibleBeanIndex := compatibleBeansIndexes[0]
 	return &initializedBeansList[compatibleBeanIndex], initializedBeanNamesList[compatibleBeanIndex], nil

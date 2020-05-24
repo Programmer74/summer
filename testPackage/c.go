@@ -27,9 +27,9 @@ func (c *C) getD() Ifce {
 	return d2
 }
 
-func (c *C) getE() *A {
+func (c *C) getE() *A2 {
 	a := c.E
-	a2 := (*a).(*A)
+	a2 := (*a).(*A2)
 	return a2
 }
 
@@ -42,5 +42,5 @@ func (c *C) DoInterfaceSpecificStuff() {
 }
 
 func (c *C) DoCustomBeanNameInjectedStuff() int {
-	return 3000 + c.getE().DoA()
+	return 3000 + c.getE().DoA2()
 }
