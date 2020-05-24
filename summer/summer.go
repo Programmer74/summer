@@ -18,10 +18,17 @@ var uninitializedBeans = make(map[string]interface{})
 var initializedBeansList = make([]interface{}, 0)
 var initializedBeanNamesList = make([]string, 0)
 
+var beanTypeAliasToBeanNameMap = make(map[string]string)
+
 var propertiesMap = make(map[string]string)
 
 func RegisterBean(beanName string, bean interface{}) {
 	uninitializedBeans[beanName] = bean
+}
+
+func RegisterBeanWithTypeAlias(beanName string, bean interface{}, beanType string) {
+	RegisterBean(beanName, bean)
+	beanTypeAliasToBeanNameMap[beanType] = beanName
 }
 
 func GetBean(beanName string) interface{} {
@@ -152,16 +159,16 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 
 	xCopy := xc.Interface().(interface{})
 
-	for i := 0; i < sourceType.NumField(); i++ {
-		sourceField := sourceType.Field(i)
+	for fieldIndex := 0; fieldIndex < sourceType.NumField(); fieldIndex++ {
+		sourceField := sourceType.Field(fieldIndex)
 		if sourceField.Tag != "" {
-			requiredTypeAsString, beanTagFound := sourceField.Tag.Lookup(SummerBeanTag)
+			qualifier, beanTagFound := sourceField.Tag.Lookup(SummerBeanTag)
 			if beanTagFound {
-				summerTotalDependenciesCount, summerInjectedDependenciesCount = tryFillBeans(sourceField, summerTotalDependenciesCount, xCopy, i, requiredTypeAsString, summerInjectedDependenciesCount)
+				summerTotalDependenciesCount, summerInjectedDependenciesCount = tryFillBeans(sourceField, summerTotalDependenciesCount, xCopy, fieldIndex, qualifier, summerInjectedDependenciesCount)
 			}
 			requiredPropertyParam, propertyTagFound := sourceField.Tag.Lookup(SummerPropertyTag)
 			if propertyTagFound {
-				tryFillProperties(sourceField, xCopy, i, requiredPropertyParam)
+				tryFillProperties(sourceField, xCopy, fieldIndex, requiredPropertyParam)
 			}
 		}
 	}
@@ -170,18 +177,20 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 	return unprocessedDependenciesLeft, xCopy
 }
 
-func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount int, xCopy interface{}, i int, requiredTypeAsString string, summerInjectedDependenciesCount int) (int, int) {
+func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount int, xCopy interface{}, fieldIndex int, qualifier string, summerInjectedDependenciesCount int) (int, int) {
 	log.Debug("Injectable 'summer' bean field %s", sourceField)
 	summerTotalDependenciesCount++
 
-	targetField := reflect.ValueOf(xCopy).Elem().Field(i)
+	targetField := reflect.ValueOf(xCopy).Elem().Field(fieldIndex)
 	if targetField.IsValid() {
 		if targetField.Kind() != reflect.Ptr {
 			panic("field annotated by 'summer' should be pointers")
 		}
 		if targetField.IsNil() {
 			log.Debug("Field %s is not set", targetField)
-			applicableBean, err := getProcessedBeanByType(requiredTypeAsString)
+
+			applicableBean, err := getProcessedBean(qualifier)
+
 			if err == nil {
 				log.Debug("Field %s value found : %s", targetField, applicableBean)
 				if !targetField.CanSet() {
@@ -208,13 +217,13 @@ func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount 
 	return summerTotalDependenciesCount, summerInjectedDependenciesCount
 }
 
-func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, i int, requiredPropertyParam string) {
+func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, fieldIndex int, requiredPropertyParam string) {
 	log.Debug("Injectable 'summer' property field %s", sourceField)
 
 	arr := strings.Split(requiredPropertyParam, "|")
 	propertyKey := arr[0]
 
-	targetField := reflect.ValueOf(xCopy).Elem().Field(i)
+	targetField := reflect.ValueOf(xCopy).Elem().Field(fieldIndex)
 	if targetField.IsValid() {
 
 		propertyValue, ok := propertiesMap[propertyKey]
@@ -226,11 +235,9 @@ func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, i int
 				propertyValue = arr[1]
 			}
 		}
-
-		log.Info("%s", propertyValue)
 		if targetField.Type().Name() == "int" {
 			valueAsInt, err := strconv.Atoi(propertyValue)
-			if err == nil {
+			if err != nil {
 				log.Error(err)
 			}
 			targetField.Set(reflect.ValueOf(valueAsInt))
@@ -239,30 +246,42 @@ func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, i int
 			targetField.Set(reflect.ValueOf(propertyValue))
 		}
 
-
 	} else {
 		log.Error("For some reason, %s is not valid", targetField)
 	}
 }
 
+func getProcessedBean(qualifier string) (*interface{}, error) {
+	if strings.HasPrefix(qualifier, "*") {
+		return getProcessedBeanByType(qualifier)
+	}
+	return getProcessedBeanByName(qualifier)
+}
+
+func getProcessedBeanByName(requiredBeanName string) (*interface{}, error) {
+	log.Debug("  Asked to find '%s'", requiredBeanName)
+	beanIndex := getProcessedBeanIndex(requiredBeanName)
+	if beanIndex > 0 {
+		return &initializedBeansList[beanIndex], nil
+	}
+	return nil, errors.New("no matches for requested name")
+}
+
 func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
 	log.Debug("  Asked to find '%s'", requiredTypeAsString)
 
-	compatibleBeansIndexes := make([]int, 0)
-
-	for i := 0; i < len(initializedBeansList); i++ {
-		bean := initializedBeansList[i]
-		beanName := initializedBeanNamesList[i]
-		beanType := reflect.TypeOf(bean)
-		log.Debug("  Trying %s", beanType)
-		if beanType.String() == requiredTypeAsString {
-			compatibleBeansIndexes = append(compatibleBeansIndexes, i)
-			log.Debug("    Found %s as candidate for injection under type %s", getString(beanName, bean), beanType)
+	compatibleBeansIndexes := getCompatibleBeansIndexes(requiredTypeAsString)
+	beanNameWithSpecifiedAlias, found := beanTypeAliasToBeanNameMap[requiredTypeAsString]
+	if found {
+		log.Info("For %s there is a bean '%s' specified separately", requiredTypeAsString, beanNameWithSpecifiedAlias)
+		beanIndex := getProcessedBeanIndex(beanNameWithSpecifiedAlias)
+		if beanIndex > 0 {
+			compatibleBeansIndexes = append(compatibleBeansIndexes, beanIndex)
 		}
 	}
 
 	if len(compatibleBeansIndexes) == 0 {
-		return nil, errors.New("   no matches for requested type")
+		return nil, errors.New("no matches for requested type")
 	}
 	if len(compatibleBeansIndexes) > 1 {
 		log.Critical("MULTIPLE INJECTION CANDIDATES")
@@ -272,4 +291,33 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
 	}
 	compatibleBeanIndex := compatibleBeansIndexes[0]
 	return &initializedBeansList[compatibleBeanIndex], nil
+}
+
+func getCompatibleBeansIndexes(requiredTypeAsString string) []int {
+	compatibleBeansIndexes := make([]int, 0)
+	for i := 0; i < len(initializedBeansList); i++ {
+		compatibleBeansIndexes = tryForCompatibility(i, requiredTypeAsString, compatibleBeansIndexes)
+	}
+	return compatibleBeansIndexes
+}
+
+func tryForCompatibility(beanIndex int, requiredTypeAsString string, compatibleBeansIndexes []int) []int {
+	bean := initializedBeansList[beanIndex]
+	beanName := initializedBeanNamesList[beanIndex]
+	beanType := reflect.TypeOf(bean)
+	log.Debug("  Trying %s", beanType)
+	if beanType.String() == requiredTypeAsString {
+		compatibleBeansIndexes = append(compatibleBeansIndexes, beanIndex)
+		log.Debug("    Found %s as candidate for injection under type %s", getString(beanName, bean), beanType)
+	}
+	return compatibleBeansIndexes
+}
+
+func getProcessedBeanIndex(beanName string) int {
+	for i := 0; i < len(initializedBeansList); i++ {
+		if initializedBeanNamesList[i] == beanName {
+			return i
+		}
+	}
+	return -1
 }

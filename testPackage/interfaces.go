@@ -1,15 +1,19 @@
 package testPackage
 
+import log "github.com/jeanphorn/log4go"
+
 type Ifce interface {
 	DoIfceStuff()
 }
 
-type Impl1 struct {}
+type Impl1 struct{}
+
 func (i *Impl1) DoIfceStuff() {
-	println("Impl1")
+	log.Warn("Impl1")
 }
 
-type Impl2 struct {}
+type Impl2 struct{}
+
 func (i *Impl2) DoIfceStuff() {
-	println("Impl2")
+	log.Warn("Impl2")
 }

@@ -12,5 +12,5 @@ func (b *B) getA() *A {
 }
 
 func (b *B) DoB() int {
-	return 10 * b.Y + b.getA().DoA()
+	return 10*b.Y + b.getA().DoA()
 }
