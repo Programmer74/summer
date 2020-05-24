@@ -2,11 +2,11 @@ package summer
 
 import (
 	"errors"
-	"fmt"
 	log "github.com/jeanphorn/log4go"
 	"reflect"
-	"strings"
 )
+
+const SUMMER_BEAN_TAG = "summer"
 
 var uninitializedBeans = make(map[string]interface{})
 
@@ -32,15 +32,10 @@ func PerformDependencyInjection() {
 		oneBeanInitialized = false
 
 		for beanName, bean := range uninitializedBeans {
-			//println("===bean", beanName, ":")
-
-			//beanType := reflect.TypeOf(bean)
-			//examiner(beanType, 0)
-
 			annotatedDependenciesCount := getAnnotatedDependenciesCount(bean)
 			if annotatedDependenciesCount == 0 {
 				log.Debug("Bean %s has no summer dependencies", getString(beanName, bean))
-				oneBeanInitialized = advanceBeanAsInitialized(beanName, bean)
+				oneBeanInitialized = advanceUnprocessedBeanAsInitialized(beanName, bean)
 			} else {
 				log.Debug("Bean %s has summer dependencies", getString(beanName, bean))
 				unprocessedDependenciesLeft, processedBean := tryFillDependencies(beanName)
@@ -79,6 +74,22 @@ func advanceBeanAsInitialized(beanName string, bean interface{}) bool {
 	return true
 }
 
+func advanceUnprocessedBeanAsInitialized(beanName string, unprocessedBean interface{}) bool {
+
+	sourceType := reflect.TypeOf(unprocessedBean)
+
+	xc := reflect.New(sourceType)
+	xc.Elem().Set(reflect.ValueOf(unprocessedBean))
+
+	bean := xc.Interface().(interface{})
+
+	initializedBeansList = append(initializedBeansList, bean)
+	initializedBeanNamesList = append(initializedBeanNamesList, beanName)
+
+	delete(uninitializedBeans, beanName)
+	return true
+}
+
 func getAnnotatedDependenciesCount(x interface{}) int {
 	t := reflect.TypeOf(x)
 	annotatedDependenciesCount := 0
@@ -89,7 +100,7 @@ func getAnnotatedDependenciesCount(x interface{}) int {
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if f.Tag != "" {
-				_, ok := f.Tag.Lookup("summer")
+				_, ok := f.Tag.Lookup(SUMMER_BEAN_TAG)
 				if ok {
 					annotatedDependenciesCount++
 				}
@@ -99,7 +110,6 @@ func getAnnotatedDependenciesCount(x interface{}) int {
 	return annotatedDependenciesCount
 }
 
-//func tryFillDependencies(x *interface{}, sourceType reflect.Type) int {
 func tryFillDependencies(beanName string) (int, interface{}) {
 	summerTotalDependenciesCount := 0
 	summerInjectedDependenciesCount := 0
@@ -108,12 +118,14 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 	sourceType := reflect.TypeOf(x)
 
 	xc := reflect.New(sourceType)
+	xc.Elem().Set(reflect.ValueOf(x))
+
 	xCopy := xc.Interface().(interface{})
 
 	for i := 0; i < sourceType.NumField(); i++ {
 		sourceField := sourceType.Field(i)
 		if sourceField.Tag != "" {
-			requiredTypeAsString, ok := sourceField.Tag.Lookup("summer")
+			requiredTypeAsString, ok := sourceField.Tag.Lookup(SUMMER_BEAN_TAG)
 			if ok {
 				log.Debug("Injectable 'summer' field %s", sourceField)
 				summerTotalDependenciesCount++
@@ -132,8 +144,14 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 								log.Critical("CANNOT SET FIELD %s", targetField)
 							}
 
-							targetField.Set(reflect.ValueOf(applicableBean).Convert(targetField.Type()))
-							summerInjectedDependenciesCount++
+							if targetField.Type().String() == "*interface {}" {
+								targetField.Set(reflect.ValueOf(applicableBean).Convert(targetField.Type()))
+								summerInjectedDependenciesCount++
+							} else {
+								//setterMethodName := "SummerSet" + sourceField.Name
+								panic("field setter injection not implemented yet")
+							}
+
 						} else {
 							log.Error("Field %s value not found by now", targetField)
 						}
@@ -152,7 +170,6 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 	return unprocessedDependenciesLeft, xCopy
 }
 
-//func getProcessedBeanByType(requiredType reflect.Type) (*interface{}, error) {
 func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
 	log.Debug("  Asked to find '%s'", requiredTypeAsString)
 
@@ -181,51 +198,3 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
 	compatibleBeanIndex := compatibleBeansIndexes[0]
 	return &initializedBeansList[compatibleBeanIndex], nil
 }
-
-func examiner(x interface{}) {
-	t := reflect.TypeOf(x)
-	examinerD(t, 1)
-}
-
-func examinerD(t reflect.Type, depth int) {
-	fmt.Println(strings.Repeat("\t", depth), "Type is", t.Name(), "and kind is", t.Kind())
-	switch t.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
-		fmt.Println(strings.Repeat("\t", depth+1), "Contained type:")
-		examinerD(t.Elem(), depth+1)
-	case reflect.Struct:
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			fmt.Println(strings.Repeat("\t", depth+1), "Field", i+1, "name is", f.Name, "type is", f.Type.Name(), "and kind is", f.Type.Kind())
-			if f.Tag != "" {
-				fmt.Println(strings.Repeat("\t", depth+2), "Tag is", f.Tag)
-				fmt.Println(strings.Repeat("\t", depth+2), "tag1 is", f.Tag.Get("tag1"), "tag2 is", f.Tag.Get("tag2"))
-			}
-		}
-	}
-}
-
-//func LoadConfig(configFileName string, configStruct interface{}) {
-//	defer func() {
-//		if r := recover(); r != nil {
-//			fmt.Println("LoadConfig.Recovered: ", r)
-//		}
-//	}()
-//	conf, err := toml.LoadFile(configFileName)
-//	if err == nil {
-//		v := reflect.ValueOf(configStruct)
-//		typeOfS := v.Elem().Type()
-//		sectionName := getTypeName(configStruct)
-//		for i := 0; i < v.Elem().NumField(); i++ {
-//			if v.Elem().Field(i).CanInterface() {
-//				kName := conf.Get(sectionName + "." + typeOfS.Field(i).Name)
-//				kValue := reflect.ValueOf(kName)
-//				if (kValue.IsValid()) {
-//					v.Elem().Field(i).Set(kValue.Convert(typeOfS.Field(i).Type))
-//				}
-//			}
-//		}
-//	} else {
-//		fmt.Println("LoadConfig.Error: " + err.Error())
-//	}
-//}

@@ -4,6 +4,6 @@ type A struct {
 	X int
 }
 
-func (a *A) doA() {
-	println("a did it")
+func (a *A) DoA() int {
+	return a.X
 }

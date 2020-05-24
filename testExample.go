@@ -11,11 +11,17 @@ func main() {
 	defer log.Close()
 
 	summer.RegisterBean("1", testPackage.C{Z: 3})
-	summer.RegisterBean("2", testPackage.A{X: 1})
-	summer.RegisterBean("3", testPackage.B{Y: 2})
-	summer.RegisterBean("4", testPackage.Impl1{})
+	summer.RegisterBean("2", testPackage.A{X: 2})
+	summer.RegisterBean("3", testPackage.B{Y: 1})
+
 	summer.PerformDependencyInjection()
 
+	a := summer.GetBean("2").(*testPackage.A)
+	b := summer.GetBean("3").(*testPackage.B)
 	c := summer.GetBean("1").(*testPackage.C)
-	c.DoC()
+
+	_ = a
+	_ = b
+
+	log.Info("Answer is %d", c.DoC())
 }
