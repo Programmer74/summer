@@ -22,6 +22,8 @@ var beanTypeAliasToBeanNameMap = make(map[string]string)
 
 var propertiesMap = make(map[string]string)
 
+var beanDependenciesVertexList = make([]string, 0)
+
 func RegisterBean(beanName string, bean interface{}) {
 	uninitializedBeans[beanName] = bean
 }
@@ -38,6 +40,15 @@ func GetBean(beanName string) interface{} {
 		}
 	}
 	panic("no processed bean found")
+}
+
+//use with https://yuml.me/diagram/scruffy/class/draw for best possible value
+func PrintDependencyGraphVertex() {
+	str := "\nDependency graph:"
+	for i := 0; i < len(beanDependenciesVertexList); i++ {
+		str = str + "\n" + beanDependenciesVertexList[i]
+	}
+	log.Warn(str)
 }
 
 func ParseProperties(path string) {
@@ -164,7 +175,8 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 		if sourceField.Tag != "" {
 			qualifier, beanTagFound := sourceField.Tag.Lookup(SummerBeanTag)
 			if beanTagFound {
-				summerTotalDependenciesCount, summerInjectedDependenciesCount = tryFillBeans(sourceField, summerTotalDependenciesCount, xCopy, fieldIndex, qualifier, summerInjectedDependenciesCount)
+				summerTotalDependenciesCount, summerInjectedDependenciesCount =
+					tryFillBeans(beanName, sourceField, summerTotalDependenciesCount, xCopy, fieldIndex, qualifier, summerInjectedDependenciesCount)
 			}
 			requiredPropertyParam, propertyTagFound := sourceField.Tag.Lookup(SummerPropertyTag)
 			if propertyTagFound {
@@ -177,7 +189,7 @@ func tryFillDependencies(beanName string) (int, interface{}) {
 	return unprocessedDependenciesLeft, xCopy
 }
 
-func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount int, xCopy interface{}, fieldIndex int, qualifier string, summerInjectedDependenciesCount int) (int, int) {
+func tryFillBeans(beanName string, sourceField reflect.StructField, summerTotalDependenciesCount int, xCopy interface{}, fieldIndex int, qualifier string, summerInjectedDependenciesCount int) (int, int) {
 	log.Debug("Injectable 'summer' bean field %s", sourceField)
 	summerTotalDependenciesCount++
 
@@ -189,7 +201,7 @@ func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount 
 		if targetField.IsNil() {
 			log.Debug("Field %s is not set", targetField)
 
-			applicableBean, err := getProcessedBean(qualifier)
+			applicableBean, applicableBeanName, err := getProcessedBean(qualifier)
 
 			if err == nil {
 				log.Debug("Field %s value found : %s", targetField, applicableBean)
@@ -200,6 +212,7 @@ func tryFillBeans(sourceField reflect.StructField, summerTotalDependenciesCount 
 				if targetField.Type().String() == "*interface {}" {
 					targetField.Set(reflect.ValueOf(applicableBean).Convert(targetField.Type()))
 					summerInjectedDependenciesCount++
+					beanDependenciesVertexList = append(beanDependenciesVertexList, "["+beanName+"]->["+applicableBeanName+"]")
 				} else {
 					panic("field setter injection not implemented yet")
 				}
@@ -251,23 +264,23 @@ func tryFillProperties(sourceField reflect.StructField, xCopy interface{}, field
 	}
 }
 
-func getProcessedBean(qualifier string) (*interface{}, error) {
+func getProcessedBean(qualifier string) (*interface{}, string, error) {
 	if strings.HasPrefix(qualifier, "*") {
 		return getProcessedBeanByType(qualifier)
 	}
 	return getProcessedBeanByName(qualifier)
 }
 
-func getProcessedBeanByName(requiredBeanName string) (*interface{}, error) {
+func getProcessedBeanByName(requiredBeanName string) (*interface{}, string, error) {
 	log.Debug("  Asked to find '%s'", requiredBeanName)
 	beanIndex := getProcessedBeanIndex(requiredBeanName)
 	if beanIndex > 0 {
-		return &initializedBeansList[beanIndex], nil
+		return &initializedBeansList[beanIndex], requiredBeanName, nil
 	}
-	return nil, errors.New("no matches for requested name")
+	return nil, "", errors.New("no matches for requested name")
 }
 
-func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
+func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, string, error) {
 	log.Debug("  Asked to find '%s'", requiredTypeAsString)
 
 	compatibleBeansIndexes := getCompatibleBeansIndexes(requiredTypeAsString)
@@ -281,16 +294,17 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, error) {
 	}
 
 	if len(compatibleBeansIndexes) == 0 {
-		return nil, errors.New("no matches for requested type")
+		return nil, "", errors.New("no matches for requested type")
 	}
 	if len(compatibleBeansIndexes) > 1 {
 		log.Critical("MULTIPLE INJECTION CANDIDATES")
 		for i := 0; i < len(compatibleBeansIndexes); i++ {
-			log.Critical(" - %s", initializedBeanNamesList[i])
+			compatibleBeanIndex := compatibleBeansIndexes[i]
+			log.Critical(" - %s", initializedBeanNamesList[compatibleBeanIndex])
 		}
 	}
 	compatibleBeanIndex := compatibleBeansIndexes[0]
-	return &initializedBeansList[compatibleBeanIndex], nil
+	return &initializedBeansList[compatibleBeanIndex], initializedBeanNamesList[compatibleBeanIndex], nil
 }
 
 func getCompatibleBeansIndexes(requiredTypeAsString string) []int {

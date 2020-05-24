@@ -12,17 +12,17 @@ func main() {
 
 	summer.ParseProperties("./example.properties")
 
-	summer.RegisterBean("1", testPackage.C{Z: 3})
-	summer.RegisterBean("2", testPackage.A{X: 2})
-	summer.RegisterBean("3", testPackage.B{Y: 1})
-	summer.RegisterBeanWithTypeAlias("4", testPackage.Impl2{}, "*testPackage.Ifce")
+	summer.RegisterBean("BeanC", testPackage.C{Z: 3})
+	summer.RegisterBean("BeanA", testPackage.A{X: 2})
+	summer.RegisterBean("BeanB", testPackage.B{Y: 1})
+	summer.RegisterBeanWithTypeAlias("Impl2:Ifce", testPackage.Impl2{}, "*testPackage.Ifce")
 	summer.RegisterBean("customBeanName", testPackage.A{X: 5})
 
 	summer.PerformDependencyInjection()
 
-	a := summer.GetBean("2").(*testPackage.A)
-	b := summer.GetBean("3").(*testPackage.B)
-	c := summer.GetBean("1").(*testPackage.C)
+	a := summer.GetBean("BeanA").(*testPackage.A)
+	b := summer.GetBean("BeanB").(*testPackage.B)
+	c := summer.GetBean("BeanC").(*testPackage.C)
 
 	_ = a
 	_ = b
@@ -31,4 +31,6 @@ func main() {
 	log.Info("Property is %d", c.C)
 	c.DoInterfaceSpecificStuff()
 	log.Info("BeanByCustomName stuff is %d", c.DoCustomBeanNameInjectedStuff())
+
+	summer.PrintDependencyGraphVertex()
 }
