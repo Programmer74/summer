@@ -1,0 +1,7 @@
+{
+  "console": {
+    "enable": true,
+    "level": "FINE",
+    "pattern": "[%D %T] [%C] [%L] %M"
+  }
+}
