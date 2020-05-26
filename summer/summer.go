@@ -223,7 +223,7 @@ func tryFillBeans(beanName string, sourceField reflect.StructField, summerTotalD
 				}
 
 			} else {
-				log.Error("Field %s value not found by now", targetField)
+				log.Debug("Field %s value not found by now", targetField)
 			}
 		} else {
 			log.Debug("Field %s already set", targetField)
@@ -291,7 +291,7 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, string, 
 	compatibleBeansIndexes := getCompatibleBeansIndexes(requiredTypeAsString)
 	beanNameWithSpecifiedAlias, found := beanTypeAliasToBeanNameMap[requiredTypeAsString]
 	if found {
-		log.Info("For %s there is a bean '%s' specified separately", requiredTypeAsString, beanNameWithSpecifiedAlias)
+		log.Debug("For %s there is a bean '%s' specified separately", requiredTypeAsString, beanNameWithSpecifiedAlias)
 		beanIndex := getProcessedBeanIndex(beanNameWithSpecifiedAlias)
 		if beanIndex >= 0 {
 			compatibleBeansIndexes = append(compatibleBeansIndexes, beanIndex)
