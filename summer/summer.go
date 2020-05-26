@@ -279,7 +279,7 @@ func getProcessedBean(qualifier string) (*interface{}, string, error) {
 func getProcessedBeanByName(requiredBeanName string) (*interface{}, string, error) {
 	log.Debug("  Asked to find '%s'", requiredBeanName)
 	beanIndex := getProcessedBeanIndex(requiredBeanName)
-	if beanIndex > 0 {
+	if beanIndex >= 0 {
 		return &initializedBeansList[beanIndex], requiredBeanName, nil
 	}
 	return nil, "", errors.New("no matches for requested name")
@@ -293,7 +293,7 @@ func getProcessedBeanByType(requiredTypeAsString string) (*interface{}, string, 
 	if found {
 		log.Info("For %s there is a bean '%s' specified separately", requiredTypeAsString, beanNameWithSpecifiedAlias)
 		beanIndex := getProcessedBeanIndex(beanNameWithSpecifiedAlias)
-		if beanIndex > 0 {
+		if beanIndex >= 0 {
 			compatibleBeansIndexes = append(compatibleBeansIndexes, beanIndex)
 		}
 	}
