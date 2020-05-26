@@ -12,6 +12,9 @@ func main() {
 
 	summer.ParseProperties("./example.properties")
 
+	value, _ := summer.GetPropertyValue("anotherProperty")
+	log.Info("Property value: %s", value)
+
 	summer.RegisterBean("BeanC", testPackage.C{Z: 3})
 	summer.RegisterBean("BeanA", testPackage.A{X: 2})
 	summer.RegisterBean("BeanB", testPackage.B{Y: 1})

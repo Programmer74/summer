@@ -24,6 +24,11 @@ var propertiesMap = make(map[string]string)
 
 var beanDependenciesVertexList = make([]string, 0)
 
+func GetPropertyValue(key string) (string, bool) {
+	value, found := propertiesMap[key]
+	return value, found
+}
+
 func RegisterBean(beanName string, bean interface{}) {
 	uninitializedBeans[beanName] = bean
 }
