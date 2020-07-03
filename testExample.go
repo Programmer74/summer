@@ -2,8 +2,8 @@ package main
 
 import (
 	log "github.com/jeanphorn/log4go"
-	"github.com/programmer74/summer/summer"
-	"github.com/programmer74/summer/testPackage"
+	"github.com/nikita-tomilov/summer/summer"
+	"github.com/nikita-tomilov/summer/testPackage"
 )
 
 func main() {
