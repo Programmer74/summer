@@ -38,13 +38,14 @@ func RegisterBeanWithTypeAlias(beanName string, bean interface{}, beanType strin
 	beanTypeAliasToBeanNameMap[beanType] = beanName
 }
 
-func GetBean(beanName string) interface{} {
+func GetBean(beanName string) *interface{} {
 	for i := 0; i < len(initializedBeansList); i++ {
 		if initializedBeanNamesList[i] == beanName {
-			return initializedBeansList[i]
+			return &initializedBeansList[i]
 		}
 	}
-	panic("no processed bean found")
+	log.Warn("no processed bean found for name", beanName)
+	return nil
 }
 
 //use with https://yuml.me/diagram/scruffy/class/draw for best possible value
