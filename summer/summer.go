@@ -69,10 +69,12 @@ func ParseProperties(path string) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		arr := strings.Split(line, "=")
-		propertyKey := arr[0]
-		propertyVal := arr[1]
-		propertiesMap[propertyKey] = propertyVal
+		if line[0] != '#' {
+			arr := strings.Split(line, "=")
+			propertyKey := arr[0]
+			propertyVal := arr[1]
+			propertiesMap[propertyKey] = propertyVal
+		}
 	}
 }
 
