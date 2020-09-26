@@ -23,9 +23,9 @@ func main() {
 
 	summer.PerformDependencyInjection()
 
-	a := summer.GetBean("BeanA").(*testPackage.A)
-	b := summer.GetBean("BeanB").(*testPackage.B)
-	c := summer.GetBean("BeanC").(*testPackage.C)
+	a := (*summer.GetBean("BeanA")).(*testPackage.A)
+	b := (*summer.GetBean("BeanB")).(*testPackage.B)
+	c := (*summer.GetBean("BeanC")).(*testPackage.C)
 
 	_ = a
 	_ = b
